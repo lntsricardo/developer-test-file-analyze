@@ -15,6 +15,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import br.com.segware.Tipo;
 import br.com.segware.bean.AgrupamentoTipoBean;
@@ -141,7 +142,6 @@ public class AtendimentoBusiness {
 		String linha = null;
 		buffer = new BufferedReader(new FileReader(ARQUIVO_CSV));
 		String tempoAnterior = "";
-		
 		while ((linha = buffer.readLine()) != null) {
 			String[] colunas = linha.split(",");
 			Tipo tipoEvento = Enum.valueOf(Tipo.class, colunas[3]);
@@ -151,6 +151,7 @@ public class AtendimentoBusiness {
 				Boolean isMaiorQueCincoMinutos = calculaTempoAlarmeAnterior(tempoAnterior, colunas[4]);
 				if (isMaiorQueCincoMinutos) {
 					listaCodigosDesarme.add(new Integer(colunas[0]));
+					break;
 				}
 			}
 			
@@ -171,7 +172,7 @@ public class AtendimentoBusiness {
 		while ((linha = buffer.readLine()) != null){
 			String[] colunas = linha.split(",");
 			Integer quantidade = mapAtendimentos.get(colunas[1]);
-			mapAtendimentos.put(colunas[1], quantidade != null ? quantidade++ : 1);
+			mapAtendimentos.put(colunas[1], quantidade != null ? quantidade + 1 : 1);
 		}
 	}
 	
@@ -187,17 +188,29 @@ public class AtendimentoBusiness {
 	private void calculaTempoMedioAtendimentoAtendente(Map<String, Long> mapAtendimentos) throws FileNotFoundException,IOException, ParseException {
 		String linha = null;
 		buffer = new BufferedReader(new FileReader(ARQUIVO_CSV));
-		
+		Map<String, List<Long>> mapTempoAtendimentos = new HashMap<String, List<Long>>(); 
 		while ((linha = buffer.readLine()) != null) {
 			String[] colunas = linha.split(",");
 			
-			Long tempoAtendimento = 0L;
-			if ((mapAtendimentos.get(colunas[6])) != null) {
-				tempoAtendimento = new Long(mapAtendimentos.get(colunas[6]));
-			}
 			Long tempoLinha = calculaTempoAtendimento(colunas[4], colunas[5]);
-			mapAtendimentos.put(colunas[6], (tempoAtendimento + tempoLinha) / 2);
+			List<Long> listaAtendimentos = mapTempoAtendimentos.get(colunas[6]);
+			if(listaAtendimentos == null){
+				listaAtendimentos = new ArrayList<Long>();
+			}
+			listaAtendimentos.add(tempoLinha);
+			mapTempoAtendimentos.put(colunas[6], listaAtendimentos);
 		}
+		
+		Set<String> atendentes = mapTempoAtendimentos.keySet();
+		for (String atendente : atendentes) {
+			List<Long> listaAtendimentos = mapTempoAtendimentos.get(atendente);
+			Long tempoTotal = 0L;
+			for (Long tempoAtendimento : listaAtendimentos) {
+				tempoTotal += tempoAtendimento;
+			}
+			mapAtendimentos.put(atendente, tempoTotal / listaAtendimentos.size());
+		}
+			
 	}
 	
 	/**
@@ -219,6 +232,7 @@ public class AtendimentoBusiness {
 			if (bean == null) {
 				bean = new AgrupamentoTipoBean();
 			}
+			bean.setTipoEvento(tipoEvento);
 			bean.setQuantidade(bean.getQuantidade() + 1);
 			mapQuantidadePorTipo.put(tipoEvento, bean);
 			
@@ -280,7 +294,7 @@ public class AtendimentoBusiness {
 		Date dataInicial = formatador.parse(dataInicio);
 		Date dataFinal = formatador.parse(dataFim);
 		
-		return (dataInicial.getTime() - dataFinal.getTime()) / MILLIS_POR_DIA;
+		return (dataFinal.getTime() - dataInicial.getTime()) / 1000;
 	}
 	
 	/**
@@ -296,7 +310,7 @@ public class AtendimentoBusiness {
 		Date dataInicial = formatador.parse(dataAlarme);
 		Date dataFinal = formatador.parse(dataDesarme);
 		
-		return (dataInicial.getTime() - dataFinal.getTime()) > MILLIS_CINCO_MINUTOS;
+		return (dataFinal.getTime() - dataInicial.getTime()) < MILLIS_CINCO_MINUTOS;
 	}
 
 	/**
